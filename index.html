@@ -119,7 +119,7 @@
         
         <div class="header">
             <div class="header-top">
-                <h1 class="app-title">Warehouse Pro</h1>
+                <h1 class="app-title">Warehouse Pro v2.0</h1>
                 <button class="menu-btn" onclick="toggleModal(true)">
                     <i class="fas fa-bars"></i>
 				</button>
@@ -155,6 +155,22 @@
 					</button>
                     <input type="file" id="fileInput" accept=".xlsx, .xls" onchange="handleFile(this)">
 				</div>
+
+                <div class="setting-group">
+                    <div class="setting-title">Backup & Restore (JSON)</div>
+                    <div style="display:flex; gap:10px; margin-bottom:5px;">
+                        <button class="btn-menu theme" style="flex:1" onclick="backupJSON()">
+                            <i class="fas fa-download"></i> Backup
+                        </button>
+                        <button class="btn-menu theme" style="flex:1" onclick="document.getElementById('jsonInput').click()">
+                            <i class="fas fa-upload"></i> Restore
+                        </button>
+                        <input type="file" id="jsonInput" accept=".json" style="display:none" onchange="handleJSONImport(this)">
+                    </div>
+                    <div style="font-size:0.75rem; color:var(--text-muted);">
+                        Gunakan file .json untuk memindahkan data ke HP lain secara utuh.
+                    </div>
+                </div>
                 
                 <div class="setting-group">
                     <div class="setting-title">Scanner Delay</div>
@@ -241,8 +257,6 @@
                         
                         <div style="display:flex; align-items:center;"><button class="btn-mini" onclick="resetBox()">Ganti</button>
                             
-                            
-                            
                             <div class="switch-container">
                                 <span id="label-mode-opname" class="switch-label" style="color:var(--accent-part);font-size:small;">AUTO</span>
                                 <label class="switch">
@@ -250,7 +264,6 @@
                                     <span class="slider"></span>
 								</label>
 							</div>
-                            
                             
 						</div>
 					</div>
@@ -309,7 +322,7 @@
         
         <audio id="audio-beep" src="https://media.geeksforgeeks.org/wp-content/uploads/20190531135120/beep.mp3"></audio>
         
-<script>
+        <script>
 			// --- KONFIGURASI GLOBAL ---
 			let currentMode = 'store';
 			let currentBox = null;
@@ -333,8 +346,8 @@
 			function init() {
 				loadPreferences();
 				startScanner();
-				setAppMode('store');
-				initSwipe();
+				setAppMode('store'); // Inisialisasi Mode Awal
+				initSwipe();         // Aktifkan Swipe Gesture
 			}
 			
 			// --- UI & THEME HANDLING ---
@@ -413,8 +426,104 @@
 					label.style.color = "var(--accent-part)";
 				}
 			}
+
+            // --- JSON BACKUP SYSTEM (TIME SUFFIX) ---
+            function backupJSON() {
+                if(fullInventory.length === 0) return Swal.fire("Kosong", "Tidak ada data untuk dibackup", "warning");
+                
+                const backupData = {
+                    date: new Date().toLocaleString('id-ID'),
+                    version: "2.0",
+                    inventory: fullInventory,
+                    logs: scannedData,
+                    preferences: {
+                        theme: document.body.getAttribute('data-theme'),
+                        cooldown: scanCooldownTime
+                    }
+                };
+                
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData));
+                
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const hour = String(now.getHours()).padStart(2, '0');
+                const minute = String(now.getMinutes()).padStart(2, '0');
+                const second = String(now.getSeconds()).padStart(2, '0');
+                
+                const timeSuffix = `${year}-${month}-${day}_${hour}-${minute}-${second}`;
+                const fileName = `Warehouse_Backup_${timeSuffix}.json`;
+                
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", fileName);
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+            }
+
+            function handleJSONImport(input) {
+                const file = input.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    try {
+                        const json = JSON.parse(e.target.result);
+                        
+                        if (!json.inventory || !Array.isArray(json.inventory)) {
+                            throw new Error("Format JSON tidak valid (Inventory missing)");
+                        }
+
+                        const confirm = await Swal.fire({
+                            title: 'Restore Backup?',
+                            html: `File Tanggal: <b>${json.date || '-'}</b><br>Jumlah Data: <b>${json.inventory.length} Items</b><br><br><span style="color:red">PERINGATAN: Data saat ini akan DITIMPA total!</span>`,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Ya, Restore!',
+                            confirmButtonColor: '#d33'
+                        });
+
+                        if (confirm.isConfirmed) {
+                            fullInventory = json.inventory;
+                            scannedData = json.logs || [];
+                            
+                            if(json.preferences) {
+                                if(json.preferences.theme) {
+                                    document.body.setAttribute('data-theme', json.preferences.theme);
+                                    localStorage.setItem('theme', json.preferences.theme);
+                                }
+                                if(json.preferences.cooldown) {
+                                    scanCooldownTime = json.preferences.cooldown;
+                                    localStorage.setItem('wh_cooldown', scanCooldownTime);
+                                }
+                            }
+                            
+                            saveInventory();
+                            localStorage.setItem('wh_data', JSON.stringify(scannedData));
+                            rebuildSystemMap();
+                            updateDBStatus(fullInventory.length);
+                            populateFilters();
+                            
+                            currentBox = null;
+                            localStorage.removeItem('wh_box');
+                            localStorage.removeItem('wh_opname_state');
+                            
+                            toggleModal(false);
+                            Swal.fire("Sukses", "Data berhasil direstore sepenuhnya.", "success");
+                            renderWorkTable();
+                            input.value = '';
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        Swal.fire("Error", "Gagal baca file JSON: " + err.message, "error");
+                    }
+                };
+                reader.readAsText(file);
+            }
 			
-            // --- HANDLE FILE: MODE "ANTI-AMNESIA" (AUTO MERGE) ---
+            // --- HANDLE EXCEL (AUTO MERGE / ANTI AMNESIA) ---
             function handleFile(input) {
                 const file = input.files[0];
                 if (!file) return;
@@ -451,7 +560,7 @@
                         if (idxTipeLokasi === -1) console.warn("Kolom Tipe Lokasi tidak ditemukan.");
                         if (idxPart === -1) throw new Error("Kolom PART NUMBER tidak ditemukan!");
 
-                        // 1. SIAPKAN DATA LAMA (UNTUK DIINTIP LOKASINYA)
+                        // 1. SIAPKAN DATA LAMA
                         let oldMap = {};
                         if (fullInventory.length > 0) {
                             fullInventory.forEach(item => {
@@ -460,15 +569,14 @@
                         }
 
                         let newInventory = [];
-                        let preservedCount = 0; // Hitung berapa lokasi yang diselamatkan
+                        let preservedCount = 0; 
                         
-                        // 2. PROSES DATA BARU DARI EXCEL
+                        // 2. PROSES DATA BARU
                         for (let i = 1; i < json.length; i++) {
                             const row = json[i];
                             if (row[idxPart]) {
                                 const pPart = row[idxPart].toString().trim().toUpperCase();
                                 
-                                // A. Cek Lokasi dari Excel (Biasanya kosong kalau master ASR1)
                                 let excelLocs = [];
                                 if (idxAttr >= 0 && row[idxAttr]) {
                                     let raw = row[idxAttr].toString().trim().toUpperCase();
@@ -477,11 +585,10 @@
                                     }
 								}
                                 
-                                // B. LOGIKA PENYELAMAT LOKASI (THE SAVIOR)
-                                // Jika Excel tidak bawa lokasi, kita cari di memori lama
+                                // LOGIKA PENYELAMAT LOKASI
                                 if (excelLocs.length === 0 && oldMap[pPart]) {
                                     if (oldMap[pPart].locations && oldMap[pPart].locations.length > 0) {
-                                        excelLocs = oldMap[pPart].locations; // AMBIL LOKASI LAMA
+                                        excelLocs = oldMap[pPart].locations; 
                                         preservedCount++;
                                     }
                                 }
@@ -492,15 +599,14 @@
                                 newInventory.push({
                                     part: pPart,
                                     desc: row[idxDesc] || "-",
-                                    qty: parseFloat(row[idxQty]) || 0, // Update Stok dari Excel Baru
-                                    locations: excelLocs, // Lokasi Aman (Entah dari Excel atau hasil Restore)
+                                    qty: parseFloat(row[idxQty]) || 0,
+                                    locations: excelLocs,
                                     category: cat,   
                                     teknisi: tek
 								});
 							}
 						}
 
-                        // 3. SIMPAN HASIL PENGGABUNGAN
                         fullInventory = newInventory;
                         
                         saveInventory();
@@ -508,7 +614,6 @@
                         updateDBStatus(fullInventory.length);
                         populateFilters();
                         
-                        // Auto refresh jika sedang buka box
                         if (currentBox) {
                              localStorage.removeItem('wh_opname_state');
                              initOpnameList(currentBox);
@@ -516,20 +621,12 @@
 
                         toggleModal(false);
                         
-                        // Laporan ke User
                         let msg = `Total Data: ${fullInventory.length} Items.`;
                         if (preservedCount > 0) {
                             msg += `<br><br><b>${preservedCount} Data Lokasi Box</b> berhasil diamankan dari database sebelumnya! 🛡️`;
-                        } else {
-                            msg += `<br><small>Data murni dari Excel (tidak ada lokasi lama yang perlu digabung).</small>`;
                         }
                         
-                        Swal.fire({
-                            title: "Update Sukses!",
-                            html: msg,
-                            icon: "success"
-                        });
-                        
+                        Swal.fire({ title: "Update Sukses!", html: msg, icon: "success" });
                         renderWorkTable();
                         
 					} catch (err) {
@@ -538,13 +635,12 @@
 					}
 				};
                 reader.readAsArrayBuffer(file);
-                input.value = ''; // Reset input
+                input.value = ''; 
 			}
 			
 			// --- FILTER LOGIC ---
 			function populateFilters() {
 				const catSet = new Set();
-				const tekSet = new Set();
 				
 				fullInventory.forEach(i => {
 					if (i.category) catSet.add(i.category);
@@ -564,10 +660,8 @@
 				const tekSelect = document.getElementById('filter-tek');
 				const selectedCat = catSelect.value;
 				
-				// Logic Enable/Disable Teknisi Dropdown
 				if (selectedCat === 'SPAREPART TEKNISI') {
 					tekSelect.disabled = false;
-					// Populate Teknisi jika belum ada
 					if (tekSelect.options.length <= 1) {
 						const tekSet = new Set();
 						fullInventory.forEach(i => {
@@ -614,7 +708,7 @@
 				}
 			}
 			
-			// --- MODE SWITCHING ---
+			// --- MODE SWITCHING & NAVIGATION (FIXED) ---
 			const modes = ['store', 'opname', 'search'];
 			
 			function setAppMode(mode) {
@@ -628,9 +722,9 @@
 				
 				const btnManual = document.querySelector('.btn-manual-scan');
 				if (mode === 'opname') {
-					if (btnManual) btnManual.style.display = 'none'; // Sembunyi di Opname
+					if (btnManual) btnManual.style.display = 'none'; 
 					} else {
-					if (btnManual) btnManual.style.display = 'flex'; // Muncul di Simpan/Cari
+					if (btnManual) btnManual.style.display = 'flex'; 
 				}
 				
 				if (mode === 'search') {
@@ -732,18 +826,17 @@
 				if (html5QrCode) html5QrCode.resume();
 			}
 
-            // --- MAIN SCAN LOGIC (DIGABUNG & DIPERBAIKI) ---
+            // --- MAIN SCAN LOGIC (PINDAH vs TAMBAH + OPNAME) ---
 			function onScanSuccess(decodedText) {
                 if (isScanLocked) return;
                 
                 let cleanText = decodedText.trim().toUpperCase();
-                // Bersihkan karakter aneh
                 if (cleanText.includes('|')) cleanText = cleanText.split('|')[0].trim();
                 
                 const isBox = boxRegex.test(cleanText);
                 const isPart = partRegex.test(cleanText);
 
-                // --- MODE SEARCH ---
+                // MODE SEARCH
                 if (currentMode === 'search') {
                     document.getElementById('audio-beep').play();
                     document.getElementById('searchInput').value = cleanText;
@@ -752,8 +845,9 @@
                     return;
 				}
                 
-                // --- MODE SIMPAN (STORE) ---
+                // MODE SIMPAN (STORE) - DENGAN LOGIKA SPLIT/MOVE
                 if (currentMode === 'store') {
+                    // 1. SCAN PART
                     if (isPart) {
                         if (fullInventory.length === 0) return Swal.fire("Eits!", "Load Excel ASR1 dulu bos!", "warning");
                         
@@ -770,32 +864,71 @@
                         return;
 					}
                     
+                    // 2. SCAN BOX
                     if (isBox) {
                         if (pendingPart) {
                             document.getElementById('audio-beep').play();
                             
-                            // 1. UPDATE DATA UTAMA (Supaya nanti muncul di Opname)
                             const item = systemDataMap[pendingPart];
                             if (item) {
                                 if (!item.locations) item.locations = [];
-                                // Masukkan box ini ke daftar lokasi part tersebut
-                                if (!item.locations.includes(cleanText)) {
-                                    item.locations.push(cleanText);
-								}
-                                saveInventory(); // Simpan permanen ke memori HP
-							}
+                                
+                                // LOGIKA PENTING: TAMBAH (SPLIT) ATAU PINDAH (MOVE)?
+                                // Jika lokasi belum ada atau box ini sudah ada di list, langsung simpan (Add/Exist)
+                                if (item.locations.length === 0 || item.locations.includes(cleanText)) {
+                                    if (!item.locations.includes(cleanText)) {
+                                        item.locations.push(cleanText);
+                                        saveInventory();
+                                        Swal.mixin({toast: true, position: 'top-end', timer: 2000, showConfirmButton: false})
+                                        .fire({icon: 'success', title: `${pendingPart} ditambahkan ke ${cleanText}`});
+                                    } else {
+                                        Swal.mixin({toast: true, position: 'top-end', timer: 2000, showConfirmButton: false})
+                                        .fire({icon: 'info', title: `Sudah ada di ${cleanText}`});
+                                    }
+                                    
+                                    // Log History
+                                    addRecord(cleanText, pendingPart, 0);
+                                    pendingPart = null;
+                                    updateUIState();
+                                    triggerCooldownAnimation();
+                                    
+                                } else {
+                                    // JIKA BARANG SUDAH ADA DI TEMPAT LAIN
+                                    html5QrCode.pause(); 
+                                    Swal.fire({
+                                        title: 'Lokasi Ganda?',
+                                        html: `Part <b>${pendingPart}</b> sudah ada di:<br><b>${item.locations.join(', ')}</b><br><br>Apa yang ingin dilakukan dengan box baru <b>${cleanText}</b>?`,
+                                        icon: 'question',
+                                        showDenyButton: true,
+                                        showCancelButton: true,
+                                        confirmButtonText: 'TAMBAH (Split Stock)',
+                                        denyButtonText: 'PINDAH (Move)',
+                                        cancelButtonText: 'Batal',
+                                        confirmButtonColor: '#27ae60', // Hijau (Add)
+                                        denyButtonColor: '#e67e22'     // Orange (Move)
+                                    }).then((result) => {
+                                        if (result.isConfirmed) {
+                                            // PILIH TAMBAH
+                                            item.locations.push(cleanText);
+                                            saveInventory();
+                                            addRecord(cleanText, pendingPart, 0);
+                                            Swal.fire("Ditambahkan", "Sekarang barang ada di banyak lokasi.", "success");
+                                        } else if (result.isDenied) {
+                                            // PILIH PINDAH
+                                            item.locations = [cleanText];
+                                            saveInventory();
+                                            addRecord(cleanText, pendingPart, 0); 
+                                            Swal.fire("Dipindahkan", `Barang sekarang HANYA ada di ${cleanText}`, "success");
+                                        }
+                                        
+                                        pendingPart = null;
+                                        updateUIState();
+                                        triggerCooldownAnimation();
+                                        html5QrCode.resume();
+                                    });
+                                }
+                            }
                             
-                            // 2. Simpan Log History
-                            addRecord(cleanText, pendingPart, 0);
-                            
-                            // Reset UI
-                            const savedPart = pendingPart;
-                            pendingPart = null;
-                            updateUIState();
-                            triggerCooldownAnimation();
-                            
-                            Swal.mixin({toast: true, position: 'top-end', timer: 2000, showConfirmButton: false})
-							.fire({icon: 'success', title: `${savedPart} disimpan di ${cleanText}`});
 						} else {
                             Swal.fire("Scan Barang Dulu", "Scan Part-nya dulu, baru Scan Box-nya.", "info");
                             triggerCooldownAnimation();
@@ -804,7 +937,7 @@
 					}
 				}
                 
-                // --- MODE OPNAME (FULL LOGIC) ---
+                // MODE OPNAME
                 if (currentMode === 'opname') {
                     if (fullInventory.length === 0) return Swal.fire("Stop!", "Wajib Load Database Excel dulu!", "error");
 
@@ -813,10 +946,7 @@
                         document.getElementById('audio-beep').play();
                         currentBox = cleanText;
                         localStorage.setItem('wh_box', currentBox);
-                        
-                        // Load data
                         initOpnameList(currentBox);
-                        
                         updateUIState();
                         Swal.mixin({toast: true, position: 'center', timer: 1000})
 						.fire({icon: 'success', title: `Opname Box: ${cleanText}`});
@@ -830,13 +960,10 @@
                         
                         document.getElementById('audio-beep').play();
                         
-                        // Cek apakah barang ini ada di list Opname?
                         const existingItem = opnameList.find(i => i.part === cleanText);
                         
                         if (existingItem) {
-                            // Cek Mode Checkbox (Manual vs Auto)
                             const isManualMode = document.getElementById('opnameModeToggle').checked;
-
                             if (isManualMode) {
                                 html5QrCode.pause();
                                 Swal.fire({
@@ -851,17 +978,14 @@
                                     if (r.isConfirmed) updateOpnameCount(cleanText, parseInt(r.value));
 								});
 							} else {
-                                // Auto increment
                                 updateOpnameCount(cleanText, 1);
 							}
 						} else {
-                            // Kalau scan part yang TIDAK ADA di list
                             html5QrCode.pause();
                             handleExtraOpnameItem(cleanText);
 						}
                         triggerCooldownAnimation();
 					} else if (!isBox) {
-                        // Scan sampah (bukan box bukan part)
                         Swal.mixin({toast: true, position: 'center', timer: 1500})
 						.fire({icon: 'warning', title: 'Format Salah', text: 'Bukan Box atau Part'});
 					    triggerCooldownAnimation();
@@ -1416,8 +1540,9 @@
 				document.getElementById('seg-diff').innerText = `Selisih (${diffCount})`;
 				}
 				
+				// --- JALANKAN INIT TERAKHIR ---
 				init();
 				
 	</script>
 </body>
-</html>		
+</html>
