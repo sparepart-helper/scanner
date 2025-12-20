@@ -313,10 +313,12 @@
                     <div class="box-header-row">
                         <h3>BOX: <span id="current-box-id">-</span></h3>
                         
-                        <div style="display:flex; align-items:center;"><button class="btn-mini" onclick="resetBox()">Ganti Box</button>
+                        <div style="display:flex; align-items:center;"><button class="btn-mini" onclick="resetBox()">Ganti</button>
+                            
+                            
                             
                             <div class="switch-container">
-                                <span id="label-mode-opname" class="switch-label" style="color:var(--accent-part)">AUTO</span>
+                                <span id="label-mode-opname" class="switch-label" style="color:var(--accent-part);font-size:small;">AUTO</span>
                                 <label class="switch">
                                     <input type="checkbox" id="opnameModeToggle" onchange="updateOpnameLabel(this)">
                                     <span class="slider"></span>
@@ -651,34 +653,43 @@
             // --- MODE SWITCHING ---
             const modes = ['store', 'opname', 'search'];
             
+            // --- MODE SWITCHING (FIXED) ---
             function setAppMode(mode) {
                 currentMode = mode;
                 pendingPart = null; 
                 
+                // 1. Update Warna Tombol Menu Atas
                 document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
                 document.getElementById(`btn-${mode}`).classList.add('active');
                 
+                // 2. Reset Tampilan Section (Sembunyikan semua dulu)
                 document.querySelectorAll('.mode-section').forEach(s => s.classList.remove('active'));
                 
                 if (mode === 'search') {
+                    // Masuk Mode Cari
                     document.getElementById('section-search').classList.add('active');
-                    } else {
+                } else {
+                    // Masuk Mode Kerja (Simpan / Opname)
                     document.getElementById('section-work').classList.add('active');
                     
-                    const opControl = document.getElementById('opname-settings');
                     const boxUi = document.getElementById('box-ui');
                     const pendingUi = document.getElementById('pending-ui');
                     
+                    // --- LOGIC: TAMPILKAN ATAU SEMBUNYIKAN HEADER BOX ---
                     if (mode === 'opname') {
-                        opControl.style.display = 'block';
-                        boxUi.style.display = 'flex'; // Flex untuk layout baru
-                        pendingUi.classList.remove('active');
-                        // Refresh filter logic visual
+                        // Kalo Mode Opname: Box UI Muncul
+                        if(boxUi) boxUi.style.display = 'flex'; 
+                        
+                        // Pastikan pending UI (kotak orange) mati dulu saat pindah tab
+                        if(pendingUi) pendingUi.classList.remove('active');
+                        
+                        // Refresh filter dropdown
                         applyOpnameFilters(false);
-                        } else {
-                        opControl.style.display = 'none';
-                        boxUi.style.display = 'none'; 
-                        pendingUi.classList.remove('active');
+                    } else {
+                        // Kalo Mode Simpan: Box UI HARUS SEMBUNYI
+                        if(boxUi) boxUi.style.display = 'none'; 
+                        
+                        if(pendingUi) pendingUi.classList.remove('active');
                     }
                     
                     renderWorkTable();
@@ -1265,5 +1276,4 @@
                     init();
         </script>
     </body>
-
 </html>
