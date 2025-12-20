@@ -11,182 +11,101 @@
         <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
         
         <style>
-            /* --- THEME VARIABLES --- */
-            :root {
-            --bg-color: #121212; --card-bg: #1e1e1e; --input-bg: #2c2c2c;
-            --text-color: #e0e0e0; --text-muted: #888; --border-color: #333;
-            --accent-box: #2196F3; --accent-part: #00E676; --accent-search: #9C27B0;
-            --danger: #ff5252; --shadow: rgba(0,0,0,0.5);
-            --pending: #f39c12;
+            :root{--bg-color:#121212;--card-bg:#1e1e1e;--input-bg:#2c2c2c;--text-color:#e0e0e0;--text-muted:#888;--border-color:#333;--accent-box:#2196F3;--accent-part:#00E676;--accent-search:#9C27B0;--danger:#ff5252;--shadow:rgba(0,0,0,0.5);--pending:#f39c12}
+            [data-theme="light"]{--bg-color:#f0f2f5;--card-bg:#ffffff;--input-bg:#f1f3f4;--text-color:#202124;--text-muted:#5f6368;--border-color:#ddd;--accent-box:#1976D2;--accent-part:#00C853;--accent-search:#7B1FA2;--danger:#d32f2f;--shadow:rgba(0,0,0,0.1);--pending:#d35400}
+            body{font-family:'Segoe UI',sans-serif;background-color:var(--bg-color);color:var(--text-color);margin:0;padding:0;display:flex;flex-direction:column;align-items:center;min-height:100vh;overflow-x:hidden;user-select:none;touch-action:pan-y}
+            .header{width:100%;padding:10px 15px;background:var(--card-bg);box-shadow:0 4px 10px var(--shadow);position:sticky;top:0;z-index:100;box-sizing:border-box}
+            .header-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+            .app-title{margin:0;font-size:1.1rem;font-weight:700}
+            .menu-btn{background:none;border:none;color:var(--text-color);font-size:1.4rem;cursor:pointer;padding:5px}
+            .mode-switch{display:flex;background:var(--input-bg);border-radius:8px;padding:4px;gap:5px}
+            .mode-btn{flex:1;padding:10px 5px;border:none;background:transparent;color:var(--text-muted);font-weight:600;cursor:pointer;border-radius:6px;font-size:0.9rem;transition:all 0.2s}
+            .mode-btn.active{background:var(--card-bg);color:var(--text-color);box-shadow:0 2px 5px var(--shadow)}
+            .mode-btn.active#btn-store{border-bottom:3px solid var(--accent-box);color:var(--accent-box)}
+            .mode-btn.active#btn-opname{border-bottom:3px solid var(--accent-part);color:var(--accent-part)}
+            .mode-btn.active#btn-search{border-bottom:3px solid var(--accent-search);color:var(--accent-search)}
+            .scanner-wrapper{width:100%;background:#333;max-width:500px;top:100px;z-index:50;padding:15px;box-sizing:border-box;position:sticky;position:-webkit-sticky;display:flex;flex-direction:column;border-radius:12px}
+            #reader{width:100%;border-radius:12px 12px 0 0;overflow:hidden;box-shadow:0 -5px 20px var(--shadow);border:3px solid var(--border-color);border-bottom:none;background:black;height:280px !important;position:relative}
+            video{object-fit:cover;height:100%;width:100%}
+            .switch-container{display:flex;align-items:center;gap:8px;margin-right:5px}
+            .switch{position:relative;display:inline-block;width:40px;height:22px}
+            .switch input{opacity:0;width:0;height:0}
+            .slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background-color:var(--accent-part);transition:.4s;border-radius:34px}
+            .slider:before{position:absolute;content:"";height:16px;width:16px;left:3px;bottom:3px;background-color:white;transition:.4s;border-radius:50%}
+            input:checked + .slider{background-color:var(--pending)}
+            input:checked + .slider:before{transform:translateX(9px)}
+            .switch-label{font-size:0.75rem;font-weight:bold;color:var(--text-muted);width:45px;text-align:right}
+            .btn-manual-scan{position:absolute;bottom:15px;right:15px;width:45px;height:45px;border-radius:50%;background:rgba(255,255,255,0.3);border:2px solid white;color:white;font-size:1.1rem;cursor:pointer;z-index:60;backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 6px rgba(0,0,0,0.3);transition:transform 0.2s}
+            .btn-manual-scan:active{transform:scale(0.9);background:rgba(255,255,255,0.5)}
+            .scanner-overlay{position:absolute;bottom:0;left:0;width:100%;background:rgba(0,0,0,0.7);color:white;padding:10px;box-sizing:border-box;display:none;text-align:center;z-index:20;border-top:2px solid var(--pending)}
+            .scanner-overlay.active{display:block;animation:slideUp 0.3s}
+            @keyframes slideUp{from{transform:translateY(100%)}
+            to{transform:translateY(0)}
             }
-            [data-theme="light"] {
-            --bg-color: #f0f2f5; --card-bg: #ffffff; --input-bg: #f1f3f4;
-            --text-color: #202124; --text-muted: #5f6368; --border-color: #ddd;
-            --accent-box: #1976D2; --accent-part: #00C853; --accent-search: #7B1FA2;
-            --danger: #d32f2f; --shadow: rgba(0,0,0,0.1);
-            --pending: #d35400;
+            .security-badge{position:absolute;top:25px;right:25px;z-index:50;background:var(--danger);color:white;padding:5px 10px;border-radius:4px;font-size:0.7rem;font-weight:bold;display:none;box-shadow:0 2px 5px rgba(0,0,0,0.5);pointer-events:none}
+            .cooldown-track{width:100%;height:8px;background:#333;border-radius:0 0 12px 12px;overflow:hidden;border:3px solid var(--border-color);border-top:none;position:relative}
+            .cooldown-bar{width:100%;height:100%;background-color:var(--accent-part);display:block;transform-origin:left}
+            .cooldown-bar.busy{background-color:var(--danger);width:0% !important;transition-timing-function:linear}
+            .cooldown-bar.ready{width:100% !important;transition:none;background-color:var(--accent-part)}
+            .panel{width:100%;max-width:500px;background:var(--card-bg);border-radius:20px 20px 0 0;padding:20px;box-sizing:border-box;flex-grow:1;box-shadow:0 -10px 30px var(--shadow);min-height:400px;margin-top:-10px;z-index:10}
+            .active-box-display{background:var(--input-bg);padding:10px 15px;border-radius:12px;margin-bottom:10px;border-left:6px solid var(--accent-box);display:flex;flex-direction:column;gap:8px}
+            .box-header-row{display:flex;justify-content:space-between;align-items:center}
+            .box-header-row h3{margin:0;font-size:1rem;color:var(--text-color);font-weight:700}
+            .box-header-row span{color:var(--accent-box);font-family:monospace;font-size:1.2rem;margin-left:8px}
+            .filter-row{display:flex;gap:8px;margin-top:5px}
+            .select-filter{flex:1;background:var(--card-bg);color:var(--text-color);border:1px solid var(--border-color);padding:8px;border-radius:6px;font-size:0.85rem;outline:none}
+            .select-filter:disabled{opacity:0.5;cursor:not-allowed}
+            .pending-card{background:var(--input-bg);padding:15px;border-radius:12px;margin-bottom:20px;border-left:6px solid var(--pending);display:none;animation:pulse 2s infinite}
+            @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(243,156,18,0.4)}
+            70%{box-shadow:0 0 0 10px rgba(243,156,18,0)}
+            100%{box-shadow:0 0 0 0 rgba(243,156,18,0)}
             }
-            
-            /* --- GLOBAL STYLES --- */
-            body {
-            font-family: 'Segoe UI', sans-serif; background-color: var(--bg-color); color: var(--text-color);
-            margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center;
-            min-height: 100vh; overflow-x: hidden; user-select: none; touch-action: pan-y;
+            .pending-card.active{display:block}
+            .btn-mini{background:var(--card-bg);color:var(--text-color);border:1px solid var(--border-color);padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem}
+            .opname-row{transition:background-color 0.3s}
+            .opname-match{background-color:rgba(0,230,118,0.15) !important;border-left:4px solid var(--accent-part)}
+            .opname-diff{background-color:rgba(255,82,82,0.15) !important;border-left:4px solid var(--danger)}
+            .opname-unknown{background-color:rgba(156,39,176,0.15) !important;border-left:4px solid var(--accent-search)}
+            .opname-counts{font-size:1.1rem;font-weight:800;padding:5px 10px;border-radius:6px}
+            .match-text{color:var(--accent-part)}
+            .diff-text{color:var(--danger)}
+            .segmented-control{display:flex;background:var(--input-bg);padding:4px;border-radius:8px;margin-bottom:10px;display:none}
+            .segment-btn{flex:1;padding:8px;border:none;background:transparent;color:var(--text-muted);font-size:0.85rem;font-weight:600;border-radius:6px;cursor:pointer;transition:all 0.2s}
+            .segment-btn.active{background:var(--card-bg);color:var(--accent-part);box-shadow:0 2px 4px rgba(0,0,0,0.2)}
+            .badge-loc{font-size:0.7rem;background:#333;color:#ddd;padding:2px 6px;border-radius:4px;display:inline-block;margin-top:3px}
+            .badge-alert{font-size:0.7rem;background:var(--pending);color:white;padding:2px 6px;border-radius:4px;font-weight:bold}
+            .badge-new{font-size:0.7rem;background:var(--accent-search);color:white;padding:2px 6px;border-radius:4px;font-weight:bold}
+            .loc-tag{background:var(--input-bg);border:1px solid var(--border-color);color:var(--text-color);padding:4px 8px;border-radius:6px;font-size:0.75rem;font-weight:600;display:inline-flex;align-items:center;margin-right:4px}
+            .loc-tag i{margin-right:4px;color:var(--accent-part)}
+            .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:2000;justify-content:flex-end;opacity:0;transition:opacity 0.3s}
+            .modal.show{display:flex;opacity:1}
+            .modal-content{background:var(--card-bg);width:85%;max-width:350px;height:100%;padding:25px;box-sizing:border-box;box-shadow:-10px 0 30px black;transform:translateX(100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);overflow-y:auto;display:flex;flex-direction:column}
+            .modal.show .modal-content{transform:translateX(0)}
+            .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;border-bottom:1px solid var(--border-color);padding-bottom:15px}
+            .btn-menu{width:100%;padding:14px;border:none;border-radius:10px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:15px;margin-bottom:12px;font-size:0.95rem;text-align:left;transition:transform 0.1s}
+            .btn-menu:active{transform:scale(0.98)}
+            .btn-menu.upload{background:var(--accent-box);color:white}
+            .btn-menu.theme{background:var(--input-bg);color:var(--text-color);border:1px solid var(--border-color)}
+            .btn-menu.export{background:#27ae60;color:white}
+            .btn-menu.reset{background:var(--danger);color:white;margin-top:10px}
+            .mode-section{display:none;animation:fadeIn 0.3s}
+            .mode-section.active{display:block}
+            @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}
+            to{opacity:1;transform:translateY(0)}
             }
-            
-            /* --- HEADER --- */
-            .header { width: 100%; padding: 10px 15px; background: var(--card-bg); box-shadow: 0 4px 10px var(--shadow); position: sticky; top: 0; z-index: 100; box-sizing: border-box; }
-            .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-            .app-title { margin: 0; font-size: 1.1rem; font-weight: 700; }
-            .menu-btn { background: none; border: none; color: var(--text-color); font-size: 1.4rem; cursor: pointer; padding: 5px; }
-            
-            .mode-switch { display: flex; background: var(--input-bg); border-radius: 8px; padding: 4px; gap: 5px; }
-            .mode-btn { flex: 1; padding: 10px 5px; border: none; background: transparent; color: var(--text-muted); font-weight: 600; cursor: pointer; border-radius: 6px; font-size: 0.9rem; transition: all 0.2s; }
-            .mode-btn.active { background: var(--card-bg); color: var(--text-color); box-shadow: 0 2px 5px var(--shadow); }
-            .mode-btn.active#btn-store { border-bottom: 3px solid var(--accent-box); color: var(--accent-box); }
-            .mode-btn.active#btn-opname { border-bottom: 3px solid var(--accent-part); color: var(--accent-part); }
-            .mode-btn.active#btn-search { border-bottom: 3px solid var(--accent-search); color: var(--accent-search); }
-            
-            /* --- SCANNER --- */
-            .scanner-wrapper { width: 100%; background: #000; max-width: 500px; top: 100px; z-index: 50; padding: 15px; box-sizing: border-box; position: sticky; position: -webkit-sticky; display: flex; flex-direction: column; }
-            #reader { width: 100%; border-radius: 12px 12px 0 0; overflow: hidden; box-shadow: 0 -5px 20px var(--shadow); border: 3px solid var(--border-color); border-bottom: none; background: black; height: 280px !important; position: relative; }
-            video { object-fit: cover; height: 100%; width: 100%; }
-            
-            /* --- TOGGLE SWITCH STYLE --- */
-            .switch-container { display: flex; align-items: center; gap: 8px; margin-right: 5px; }
-            .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
-            .switch input { opacity: 0; width: 0; height: 0; }
-            .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--accent-part); transition: .4s; border-radius: 34px; }
-            .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
-            
-            /* Kalau Checked (Manual) jadi warna Orange/Pending */
-            input:checked + .slider { background-color: var(--pending); }
-            input:checked + .slider:before { transform: translateX(9px); }
-            
-            /* Label text kecil di samping switch */
-            .switch-label { font-size: 0.75rem; font-weight: bold; color: var(--text-muted); width: 45px; text-align: right; }
-            
-            /* --- Tambahkan di bagian CSS --- */
-            .btn-manual-scan {
-            position: absolute; 
-            bottom: 15px; 
-            right: 15px;
-            width: 45px; 
-            height: 45px; 
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.3); 
-            border: 2px solid white;
-            color: white; 
-            font-size: 1.1rem; 
-            cursor: pointer; 
-            z-index: 60; /* Lebih tinggi dari badge lain */
-            backdrop-filter: blur(4px); 
-            display: flex;
-            align-items: center; 
-            justify-content: center;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            transition: transform 0.2s;
-            }
-            .btn-manual-scan:active { transform: scale(0.9); background: rgba(255,255,255,0.5); }
-            
-            /* OVERLAY & BADGES */
-            .scanner-overlay {
-            position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); 
-            color: white; padding: 10px; box-sizing: border-box; display: none; text-align: center;
-            z-index: 20; border-top: 2px solid var(--pending);
-            }
-            .scanner-overlay.active { display: block; animation: slideUp 0.3s; }
-            @keyframes slideUp { from {transform: translateY(100%);} to {transform: translateY(0);} }
-            
-            .security-badge { 
-            position: absolute; top: 25px; right: 25px; z-index: 50;
-            background: var(--danger); color: white; padding: 5px 10px; 
-            border-radius: 4px; font-size: 0.7rem; font-weight: bold; 
-            display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.5); pointer-events: none;
-            }
-            
-            .cooldown-track { width: 100%; height: 8px; background: #333; border-radius: 0 0 12px 12px; overflow: hidden; border: 3px solid var(--border-color); border-top: none; position: relative; }
-            .cooldown-bar { width: 100%; height: 100%; background-color: var(--accent-part); display: block; transform-origin: left; }
-            .cooldown-bar.busy { background-color: var(--danger); width: 0% !important; transition-timing-function: linear; }
-            .cooldown-bar.ready { width: 100% !important; transition: none; background-color: var(--accent-part); }
-            
-            /* --- PANEL --- */
-            .panel { width: 100%; max-width: 500px; background: var(--card-bg); border-radius: 20px 20px 0 0; padding: 20px; box-sizing: border-box; flex-grow: 1; box-shadow: 0 -10px 30px var(--shadow); min-height: 400px; margin-top: -10px; z-index: 10; }
-            
-            /* BOX UI COMPACT (UPDATED) */
-            .active-box-display { 
-            background: var(--input-bg); padding: 10px 15px; border-radius: 12px; 
-            margin-bottom: 10px; border-left: 6px solid var(--accent-box); 
-            display: flex; flex-direction: column; gap: 8px;
-            }
-            .box-header-row { display: flex; justify-content: space-between; align-items: center; }
-            .box-header-row h3 { margin: 0; font-size: 1rem; color: var(--text-color); font-weight: 700; }
-            .box-header-row span { color: var(--accent-box); font-family: monospace; font-size: 1.2rem; margin-left: 8px; }
-            
-            /* FILTERS UI (NEW) */
-            .filter-row { display: flex; gap: 8px; margin-top: 5px; }
-            .select-filter {
-            flex: 1; background: var(--card-bg); color: var(--text-color);
-            border: 1px solid var(--border-color); padding: 8px; border-radius: 6px;
-            font-size: 0.85rem; outline: none;
-            }
-            .select-filter:disabled { opacity: 0.5; cursor: not-allowed; }
-            
-            .pending-card {
-            background: var(--input-bg); padding: 15px; border-radius: 12px; margin-bottom: 20px; 
-            border-left: 6px solid var(--pending); display: none; animation: pulse 2s infinite;
-            }
-            @keyframes pulse { 0% {box-shadow: 0 0 0 0 rgba(243, 156, 18, 0.4);} 70% {box-shadow: 0 0 0 10px rgba(243, 156, 18, 0);} 100% {box-shadow: 0 0 0 0 rgba(243, 156, 18, 0);} }
-            .pending-card.active { display: block; }
-            
-            .btn-mini { background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.8rem; }
-            
-            /* OPNAME TABLE */
-            .opname-row { transition: background-color 0.3s; }
-            .opname-match { background-color: rgba(0, 230, 118, 0.15) !important; border-left: 4px solid var(--accent-part); }
-            .opname-diff { background-color: rgba(255, 82, 82, 0.15) !important; border-left: 4px solid var(--danger); }
-            .opname-unknown { background-color: rgba(156, 39, 176, 0.15) !important; border-left: 4px solid var(--accent-search); }
-            .opname-counts { font-size: 1.1rem; font-weight: 800; padding: 5px 10px; border-radius: 6px; }
-            .match-text { color: var(--accent-part); }
-            .diff-text { color: var(--danger); }
-            
-            .badge-loc { font-size: 0.7rem; background: #333; color: #ddd; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 3px; }
-            .badge-alert { font-size: 0.7rem; background: var(--pending); color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-            .badge-new { font-size: 0.7rem; background: var(--accent-search); color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-            .loc-tag { background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; display: inline-flex; align-items: center; margin-right: 4px; }
-            .loc-tag i { margin-right: 4px; color: var(--accent-part); }
-            
-            /* MODAL */
-            .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: flex-end; opacity: 0; transition: opacity 0.3s; }
-            .modal.show { display: flex; opacity: 1; }
-            .modal-content { background: var(--card-bg); width: 85%; max-width: 350px; height: 100%; padding: 25px; box-sizing: border-box; box-shadow: -10px 0 30px black; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); overflow-y: auto; display: flex; flex-direction: column; }
-            .modal.show .modal-content { transform: translateX(0); }
-            .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 1px solid var(--border-color); padding-bottom: 15px; }
-            .btn-menu { width: 100%; padding: 14px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 15px; margin-bottom: 12px; font-size: 0.95rem; text-align: left; transition: transform 0.1s; }
-            .btn-menu:active { transform: scale(0.98); }
-            .btn-menu.upload { background: var(--accent-box); color: white; }
-            .btn-menu.theme { background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); }
-            .btn-menu.export { background: #27ae60; color: white; }
-            .btn-menu.reset { background: var(--danger); color: white; margin-top: 10px; }
-            
-            .mode-section { display: none; animation: fadeIn 0.3s; }
-            .mode-section.active { display: block; }
-            @keyframes fadeIn { from {opacity:0; transform: translateY(10px);} to {opacity:1; transform: translateY(0);} }
-            #fileInput { display: none; }
-            input[type=range] { width: 100%; accent-color: var(--accent-part); height: 5px; background: #444; border-radius: 5px; outline: none; -webkit-appearance: none; }
-            .range-value { float: right; font-weight: bold; color: var(--accent-part); font-size: 0.9rem; }
-            
-            .opname-controls { display: none; margin-bottom: 10px; background: var(--input-bg); padding: 8px; border-radius: 10px; }
-            .radio-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.95rem; }
-            input[type="radio"] { transform: scale(1.2); accent-color: var(--accent-part); }
-            .table-container { max-height: 500px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 20px; }
-            table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-            th { background: var(--input-bg); color: var(--text-muted); padding: 12px; text-align: left; position: sticky; top: 0; z-index: 5; border-bottom: 2px solid var(--border-color); }
-            td { border-bottom: 1px solid var(--border-color); padding: 12px; color: var(--text-color); vertical-align: middle; }
-            
-            .search-group { display: flex; gap: 10px; margin-bottom: 20px; }
-            .input-search { flex: 1; padding: 12px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 8px; font-size: 1rem; }
-            .btn-search { background: var(--accent-search); color: white; border: none; border-radius: 8px; width: 50px; cursor: pointer; font-size: 1.2rem; }
+            #fileInput{display:none}
+            input[type=range]{width:100%;accent-color:var(--accent-part);height:5px;background:#444;border-radius:5px;outline:none;-webkit-appearance:none}
+            .range-value{float:right;font-weight:bold;color:var(--accent-part);font-size:0.9rem}
+            .opname-controls{display:none;margin-bottom:10px;background:var(--input-bg);padding:8px;border-radius:10px}
+            .radio-label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.95rem}
+            input[type="radio"]{transform:scale(1.2);accent-color:var(--accent-part)}
+            .table-container{max-height:500px;overflow-y:auto;border:1px solid var(--border-color);border-radius:10px;margin-bottom:20px}
+            table{width:100%;border-collapse:collapse;font-size:0.85rem}
+            th{background:var(--input-bg);color:var(--text-muted);padding:12px;text-align:left;position:sticky;top:0;z-index:5;border-bottom:2px solid var(--border-color)}
+            td{border-bottom:1px solid var(--border-color);padding:12px;color:var(--text-color);vertical-align:middle}
+            .search-group{display:flex;gap:10px;margin-bottom:20px}
+            .input-search{flex:1;padding:12px;background:var(--input-bg);border:1px solid var(--border-color);color:var(--text-color);border-radius:8px;font-size:1rem}
+            .btn-search{background:var(--accent-search);color:white;border:none;border-radius:8px;width:50px;cursor:pointer;font-size:1.2rem}
         </style>
     </head>
     <body>
@@ -339,7 +258,11 @@
                     </div>
                 </div>
                 
-                
+                <div id="opname-tabs" class="segmented-control">
+                    <button class="segment-btn active" onclick="setOpnameFilter('all')" id="seg-all">Semua</button>
+                    <button class="segment-btn" onclick="setOpnameFilter('diff')" id="seg-diff">Selisih</button>
+                    <button class="segment-btn" onclick="setOpnameFilter('pending')" id="seg-pending">Belum (0)</button>
+                </div>
                 <div class="table-container">
                     <table id="work-table">
                         <thead id="table-header"></thead>
@@ -389,6 +312,7 @@
             let systemDataMap = {}; 
             let html5QrCode;
             let opnameList = [];
+            let currentOpnameView = 'all';
             
             // Anti-Spam & Cooldown
             let scanCooldownTime = 3000; 
@@ -658,37 +582,28 @@
                 currentMode = mode;
                 pendingPart = null; 
                 
-                // 1. Update Warna Tombol Menu Atas
                 document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
                 document.getElementById(`btn-${mode}`).classList.add('active');
                 
-                // 2. Reset Tampilan Section (Sembunyikan semua dulu)
                 document.querySelectorAll('.mode-section').forEach(s => s.classList.remove('active'));
                 
                 if (mode === 'search') {
-                    // Masuk Mode Cari
                     document.getElementById('section-search').classList.add('active');
-                } else {
-                    // Masuk Mode Kerja (Simpan / Opname)
+                    } else {
                     document.getElementById('section-work').classList.add('active');
                     
                     const boxUi = document.getElementById('box-ui');
                     const pendingUi = document.getElementById('pending-ui');
+                    const opTabs = document.getElementById('opname-tabs'); // UPDATE INI
                     
-                    // --- LOGIC: TAMPILKAN ATAU SEMBUNYIKAN HEADER BOX ---
                     if (mode === 'opname') {
-                        // Kalo Mode Opname: Box UI Muncul
                         if(boxUi) boxUi.style.display = 'flex'; 
-                        
-                        // Pastikan pending UI (kotak orange) mati dulu saat pindah tab
+                        if(opTabs) opTabs.style.display = 'flex'; // Tampilkan Tabs
                         if(pendingUi) pendingUi.classList.remove('active');
-                        
-                        // Refresh filter dropdown
                         applyOpnameFilters(false);
-                    } else {
-                        // Kalo Mode Simpan: Box UI HARUS SEMBUNYI
+                        } else {
                         if(boxUi) boxUi.style.display = 'none'; 
-                        
+                        if(opTabs) opTabs.style.display = 'none'; // Sembunyikan Tabs
                         if(pendingUi) pendingUi.classList.remove('active');
                     }
                     
@@ -760,14 +675,14 @@
                 if(html5QrCode) html5QrCode.resume();
             }
             // --- CORE LOGIC (UPDATED) ---
+            // --- CORE LOGIC (FIXED) ---
             function onScanSuccess(decodedText) {
                 if (isScanLocked) return;
                 
                 let cleanText = decodedText.trim().toUpperCase();
-                // Hapus karakter pipa | jika ada (kadang ada di QR part tertentu)
                 if (cleanText.includes('|')) cleanText = cleanText.split('|')[0].trim();
                 
-                // 1. MODE SEARCH (Cari)
+                // 1. MODE SEARCH
                 if (currentMode === 'search') {
                     document.getElementById('audio-beep').play();
                     document.getElementById('searchInput').value = cleanText;
@@ -776,16 +691,14 @@
                     return;
                 }
                 
-                // LOGIKA DETEKSI TIPE (BOX vs PART)
                 const isBox = boxRegex.test(cleanText);
                 const isPart = partRegex.test(cleanText);
                 
-                // Debugging di console (opsional, untuk cek saja)
+                // Debug log
                 console.log(`Scan: ${cleanText} | isBox: ${isBox} | isPart: ${isPart}`);
                 
-                // 2. MODE STORE (Simpan)
+                // 2. MODE STORE
                 if (currentMode === 'store') {
-                    // Validasi Format: Jika bukan Box dan bukan Part, tolak.
                     if (!isBox && !isPart) {
                         Swal.mixin({toast: true, position: 'center', timer: 2000})
                         .fire({icon: 'error', title: 'Format QR Tidak Dikenali', text: cleanText});
@@ -795,8 +708,6 @@
                     
                     if (isPart) {
                         if (fullInventory.length === 0) return Swal.fire("Error", "Load Database dulu!", "error");
-                        
-                        // Cek database
                         if (!systemDataMap[cleanText]) {
                             Swal.fire("Unknown", `Part ${cleanText} tidak terdaftar di DB`, "error");
                             triggerCooldownAnimation();
@@ -835,7 +746,7 @@
                     }
                 }
                 
-                // 3. MODE OPNAME
+                // 3. MODE OPNAME (BAGIAN INI YANG DIPERBAIKI)
                 if (currentMode === 'opname') {
                     if (fullInventory.length === 0) return Swal.fire("Stop!", "Wajib Load Database Excel dulu!", "error");
                     
@@ -858,8 +769,10 @@
                         const existingItem = opnameList.find(i => i.part === cleanText);
                         
                         if (existingItem) {
-                            const type = document.querySelector('input[name="opnameType"]:checked').value;
-                            if (type === 'manual') {
+                            // --- FIX: BACA DARI CHECKBOX SWITCH (BUKAN RADIO BUTTON) ---
+                            const isManualMode = document.getElementById('opnameModeToggle').checked;
+                            
+                            if (isManualMode) {
                                 html5QrCode.pause();
                                 Swal.fire({
                                     title: 'Input Jumlah Fisik',
@@ -874,6 +787,7 @@
                                     }
                                 });
                                 } else {
+                                // Auto Mode (+1)
                                 updateOpnameCount(cleanText, 1);
                                 triggerCooldownAnimation();
                             }
@@ -1218,6 +1132,16 @@
                     }
                     }
                     
+                    // --- FUNGSI FILTER BARU ---
+                    function setOpnameFilter(view) {
+                    currentOpnameView = view;
+                    // Update Tampilan Tombol
+                    document.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
+                    document.getElementById(`seg-${view}`).classList.add('active');
+                    renderOpnameTable();
+                    }
+                    
+                    // --- UPDATE FUNGSI RENDER TABLE OPNAME ---
                     function renderOpnameTable() {
                     if(currentMode !== 'opname') return;
                     const tbody = document.getElementById('result-body');
@@ -1231,6 +1155,7 @@
                     return;
                     }
                     
+                    // 1. Sort Data Dulu
                     const sortedList = [...opnameList].sort((a, b) => {
                     if (a.isUnregistered && !b.isUnregistered) return -1;
                     if (!a.isUnregistered && b.isUnregistered) return 1;
@@ -1242,7 +1167,30 @@
                     return 0;
                     });
                     
-                    sortedList.forEach(item => {
+                    // 2. Filter Data Sesuai Tab yang Dipilih
+                    const filteredList = sortedList.filter(item => {
+                    if (currentOpnameView === 'all') return true;
+                    if (currentOpnameView === 'diff') {
+                    // Tampilkan jika jumlah beda, atau item baru/extra
+                    return (item.physicalQty !== item.systemQty) || item.isExtra || item.isUnregistered;
+                    }
+                    if (currentOpnameView === 'pending') {
+                    // Tampilkan jika belum dihitung (Fisik 0)
+                    return item.physicalQty === 0;
+                    }
+                    return true;
+                    });
+                    
+                    // Feedback jika filter kosong
+                    if(filteredList.length === 0) {
+                    let msg = "Semua Sudah Sesuai!";
+                    if(currentOpnameView === 'pending') msg = "Semua Sudah Dihitung!";
+                    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:30px; color:var(--text-muted); font-style:italic;">${msg} <i class="fas fa-check-double" style="color:var(--accent-part)"></i></td></tr>`;
+                    return;
+                    }
+                    
+                    // 3. Render Loop
+                    filteredList.forEach(item => {
                     let rowClass = 'opname-match'; let textClass = 'match-text';
                     if (item.isUnregistered) { rowClass = 'opname-unknown'; textClass = 'diff-text'; }
                     else if (item.physicalQty !== item.systemQty) { rowClass = 'opname-diff'; textClass = 'diff-text'; }
@@ -1253,6 +1201,8 @@
                     
                     const tr = document.createElement('tr');
                     tr.className = `opname-row ${rowClass}`;
+                    
+                    // Klik untuk edit
                     tr.onclick = () => {
                     Swal.fire({
                     title: 'Koreksi Fisik', text: item.part, input: 'number', inputValue: item.physicalQty, showCancelButton: true
@@ -1272,6 +1222,7 @@
                     tbody.appendChild(tr);
                     });
                     }
+                    
                     
                     init();
         </script>
