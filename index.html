@@ -135,12 +135,33 @@
 			input[type="radio"]{transform:scale(1.2);accent-color:var(--accent-part)}
 			.table-container{max-height:500px;overflow-y:auto;border:1px solid var(--border-color);border-radius:10px;margin-bottom:20px}
 			table{width:100%;border-collapse:collapse;font-size:0.85rem}
-			th{background:var(--input-bg);color:var(--text-muted);padding:12px;text-align:left;position:sticky;top:0;z-index:5;border-bottom:2px solid var(--border-color)}
-			td{border-bottom:1px solid var(--border-color);padding:12px;color:var(--text-color);vertical-align:middle}
+			/* KODE BARU (Compact Mode) */
+			th { 
+			background: var(--input-bg); 
+			color: var(--text-muted); 
+			padding: 10px 5px; /* AtasBawah 10, KiriKanan 5 */
+			text-align: left; 
+			position: sticky; 
+			top: 0; 
+			z-index: 5; 
+			border-bottom: 2px solid var(--border-color);
+			font-size: 0.8rem; /* Font header sedikit dikecilkan */
+			}
+			
+			td { 
+			border-bottom: 1px solid var(--border-color); 
+			padding: 8px 5px; /* Padding sel lebih rapat */
+			color: var(--text-color); 
+			vertical-align: middle; 
+			}
 			.search-group{display:flex;gap:10px;margin-bottom:20px}
 			.input-search{flex:1;padding:12px;background:var(--input-bg);border:1px solid var(--border-color);color:var(--text-color);border-radius:8px;font-size:1rem}
 			.btn-search{background:var(--accent-search);color:white;border:none;border-radius:8px;width:50px;cursor:pointer;font-size:1.2rem}
 			.long-press-hint { font-size:0.65rem; color:var(--text-muted); font-style:italic; display:block; margin-top:2px; }
+.table-container::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+}
 		</style>
 	</head>
 	<body>
@@ -382,24 +403,30 @@
 			const boxRegex = /^[A-Z0-9]{2,3}-[0-9]{2,3}$/;
 			const partRegex = /^[A-Z0-9]{2,}-[A-Z0-9]{4,}/;
 			
-			// --- MESIN DATABASE (INDEXEDDB) ---
-			const DB_NAME = 'WarehousePro_v4_FixCount'; 
-			const DB_VERSION = 1;
-			let db;
+			// --- MESIN DATABASE (INDEXEDDB V2 UPGRADE) ---
+            const DB_NAME = 'WarehousePro_v5_OpnameFix'; // Ganti nama agar bersih
+            const DB_VERSION = 1;
+            let db;
+            let saveOpnameTimeout; // Variabel untuk Debounce Save
 			
-			// --- [FIXED] INIT DB AGAR MENERIMA DUPLIKAT PART NUMBER ---
-			async function initDB() {
-				if (!('indexedDB' in window)) {
-					console.warn('IndexedDB not supported');
-					return null;
+            async function initDB() {
+                if (!('indexedDB' in window)) {
+                    console.warn('IndexedDB not supported');
+                    return null;
 				}
-				return idb.openDB(DB_NAME, DB_VERSION, {
-					upgrade(db) {
-						if (!db.objectStoreNames.contains('inventory')) {
-							db.createObjectStore('inventory', { keyPath: 'id', autoIncrement: true });
+                return idb.openDB(DB_NAME, DB_VERSION, {
+                    upgrade(db) {
+                        // Store Inventory (Data Barang)
+                        if (!db.objectStoreNames.contains('inventory')) {
+                            db.createObjectStore('inventory', { keyPath: 'id', autoIncrement: true });
 						}
-						if (!db.objectStoreNames.contains('logs')) {
-							db.createObjectStore('logs', { autoIncrement: true });
+                        // Store Logs (Riwayat Scan)
+                        if (!db.objectStoreNames.contains('logs')) {
+                            db.createObjectStore('logs', { autoIncrement: true });
+						}
+                        // [BARU] Store State Opname (Menyimpan progress opname agar tidak hilang)
+                        if (!db.objectStoreNames.contains('opname_state')) {
+                            db.createObjectStore('opname_state', { keyPath: 'key' });
 						}
 					},
 				});
@@ -445,49 +472,53 @@
 			}
 			
 			// --- INIT APPLICATION ---
-			async function init() {
-				if (typeof idb === 'undefined') {
-					Swal.fire({
-						icon: 'error',
-						title: 'Gagal Memuat System',
-						text: 'Library Database tidak terhubung. Pastikan koneksi internet lancar lalu Refresh halaman.',
-						confirmButtonText: 'Refresh Sekarang'
-						}).then((r) => {
-						if (r.isConfirmed) location.reload();
-					});
-					return;
+			// --- INIT APPLICATION ---
+            async function init() {
+                if (typeof idb === 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Gagal Memuat System',
+                        text: 'Library Database tidak terhubung. Refresh halaman.',
+                        confirmButtonText: 'Refresh'
+					}).then((r) => { if (r.isConfirmed) location.reload(); });
+                    return;
 				}
-				
-				try {
-					db = await initDB();
-					const hasData = await loadFromDB();
-					
-					loadPreferences();
-					
-					if (hasData) {
-						rebuildSystemMap();
-						updateDBStatus(fullInventory.length);
-						populateFilters();
-						renderWorkTable();
+                
+                try {
+                    db = await initDB();
+                    
+                    // [PENTING] Await loadPreferences dulu sebelum render data
+                    await loadPreferences(); 
+                    
+                    const hasData = await loadFromDB();
+                    
+                    if (hasData) {
+                        rebuildSystemMap();
+                        updateDBStatus(fullInventory.length);
+                        populateFilters();
+                        // Render sesuai mode yang di-restore (bisa jadi Opname)
+                        // setAppMode(currentMode) akan dipanggil di bawah
 						} else {
-						updateDBStatus(0);
+                        updateDBStatus(0);
 					}
 					} catch (e) {
-					console.error("DB Init Error:", e);
+                    console.error("DB Init Error:", e);
 				}
-				
-				document.querySelectorAll('.modal-content .btn-menu').forEach(btn => {
-					btn.addEventListener('click', () => setTimeout(() => toggleModal(false), 100));
+                
+                document.querySelectorAll('.modal-content .btn-menu').forEach(btn => {
+                    btn.addEventListener('click', () => setTimeout(() => toggleModal(false), 100));
 				});
-				
-				const tableContainer = document.querySelector('.table-container');
-				if (tableContainer) {
-					tableContainer.addEventListener('scroll', handleTableScroll);
+                
+                const tableContainer = document.querySelector('.table-container');
+                if (tableContainer) {
+                    tableContainer.addEventListener('scroll', handleTableScroll);
 				}
-				
-				startScanner();
-				setAppMode('store'); 
-				initSwipe();
+                
+                startScanner();
+                
+                // Gunakan mode yang di-restore dari loadPreferences (atau default store)
+                setAppMode(currentMode); 
+                initSwipe();
 			}
 			
 			// --- UI & THEME HANDLING ---
@@ -511,18 +542,52 @@
 				localStorage.setItem('wh_cooldown', scanCooldownTime);
 			}
 			
-			function loadPreferences() {
-				const savedTheme = localStorage.getItem('theme') || 'dark';
-				document.body.setAttribute('data-theme', savedTheme);
-				
-				const savedCD = localStorage.getItem('wh_cooldown');
-				if (savedCD) {
-					scanCooldownTime = parseInt(savedCD);
-					document.getElementById('cooldownSlider').value = scanCooldownTime / 1000;
-					document.getElementById('rangeVal').innerText = (scanCooldownTime / 1000) + " Detik";
+			async function loadPreferences() {
+                // 1. Load Tema & Cooldown
+                const savedTheme = localStorage.getItem('theme') || 'dark';
+                document.body.setAttribute('data-theme', savedTheme);
+                
+                const savedCD = localStorage.getItem('wh_cooldown');
+                if (savedCD) {
+                    scanCooldownTime = parseInt(savedCD);
+                    document.getElementById('cooldownSlider').value = scanCooldownTime / 1000;
+                    document.getElementById('rangeVal').innerText = (scanCooldownTime / 1000) + " Detik";
 				}
 				
-				if (localStorage.getItem('wh_box')) currentBox = localStorage.getItem('wh_box');
+                // 2. [BARU] Load Mode Terakhir (Agar refresh tidak reset ke Store)
+                const savedMode = localStorage.getItem('wh_last_mode');
+                if (savedMode) {
+                    // Kita set variabelnya dulu, setAppMode dipanggil nanti di init()
+                    currentMode = savedMode; 
+				}
+				
+                // 3. [BARU] Restore Progress Opname dari IndexedDB
+                if (db) {
+                    try {
+                        const state = await db.get('opname_state', 'current_session');
+                        if (state && state.list && state.list.length > 0) {
+                            console.log("Restoring Opname Session...");
+                            opnameList = state.list;
+                            currentBox = state.box;
+                            opnameCategoryMode = state.mode || 'GUDANG';
+                            currentTeknisi = state.teknisi || null;
+							
+                            // Update UI Switch (Toggle)
+                            const toggle = document.getElementById('catModeToggle');
+                            if(toggle) {
+                                toggle.checked = (opnameCategoryMode === 'TEKNISI');
+                                // Panggil toggle tapi dengan flag FALSE agar tidak me-reset list
+                                toggleOpnameMode(toggle, false); 
+							}
+                            
+                            // Update Tampilan Box
+                            const boxEl = document.getElementById('current-box-id');
+                            if(boxEl && currentBox) boxEl.innerText = currentBox;
+						}
+						} catch (e) {
+                        console.error("Gagal restore opname:", e);
+					}
+				}
 			}
 			
 			// --- SECURITY ---
@@ -769,31 +834,42 @@
 			}
 			
 			// --- OPNAME MODE TOGGLE ---
-			function toggleOpnameMode(checkbox) {
-				const uiHeader = document.getElementById('box-ui');
-				const uiGudang = document.getElementById('ui-gudang');
-				const uiTeknisi = document.getElementById('ui-teknisi');
-				const title = document.getElementById('opname-mode-title');
-				
-				if (checkbox.checked) {
-					opnameCategoryMode = 'TEKNISI';
-					uiHeader.classList.add('mode-teknisi');
-					uiGudang.style.display = 'none';
-					uiTeknisi.style.display = 'block';
-					title.innerText = "TEKNISI / PEMEGANG";
-					opnameList = [];
-					renderOpnameTable();
+			function toggleOpnameMode(checkbox, shouldReset = true) {
+                const uiHeader = document.getElementById('box-ui');
+                const uiGudang = document.getElementById('ui-gudang');
+                const uiTeknisi = document.getElementById('ui-teknisi');
+                const title = document.getElementById('opname-mode-title');
+                
+                if (checkbox.checked) {
+                    // MODE TEKNISI
+                    opnameCategoryMode = 'TEKNISI';
+                    uiHeader.classList.add('mode-teknisi');
+                    uiGudang.style.display = 'none';
+                    uiTeknisi.style.display = 'block';
+                    title.innerText = "TEKNISI / PEMEGANG";
+                    
+                    if(shouldReset) {
+                        opnameList = [];
+                        renderOpnameTable();
+					}
 					} else {
-					opnameCategoryMode = 'GUDANG';
-					uiHeader.classList.remove('mode-teknisi');
-					uiGudang.style.display = 'flex';
-					uiTeknisi.style.display = 'none';
-					title.innerText = "GUDANG / SPAREPART BAIK";
-					if (currentBox) {
-						initOpnameList(currentBox);
+                    // MODE GUDANG
+                    opnameCategoryMode = 'GUDANG';
+                    uiHeader.classList.remove('mode-teknisi');
+                    uiGudang.style.display = 'flex';
+                    uiTeknisi.style.display = 'none';
+                    title.innerText = "GUDANG / SPAREPART BAIK";
+                    
+                    if(shouldReset) {
+                        if (currentBox) {
+                            initOpnameList(currentBox);
+							} else {
+                            opnameList = [];
+                            renderOpnameTable();
+						}
 						} else {
-						opnameList = [];
-						renderOpnameTable();
+                        // Jika mode restore, cukup render ulang tanpa reset
+                        renderOpnameTable();
 					}
 				}
 			}
@@ -848,44 +924,45 @@
 				}
 			}
 			
-			// --- MODE SWITCHING & NAVIGATION ---
 			function setAppMode(mode) {
-				currentMode = mode;
-				pendingPart = null;
-				
-				document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-				document.getElementById(`btn-${mode}`).classList.add('active');
-				document.querySelectorAll('.mode-section').forEach(s => s.classList.remove('active'));
-				
-				const btnManual = document.querySelector('.btn-manual-scan');
-				
-				if (mode === 'search') {
-					document.getElementById('section-search').classList.add('active');
-					if (btnManual) btnManual.style.display = 'flex';
+                currentMode = mode;
+                localStorage.setItem('wh_last_mode', mode); // Simpan agar ingat saat refresh
+                pendingPart = null;
+                
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                document.getElementById(`btn-${mode}`).classList.add('active');
+                document.querySelectorAll('.mode-section').forEach(s => s.classList.remove('active'));
+                
+                const btnManual = document.querySelector('.btn-manual-scan');
+                
+                if (mode === 'search') {
+                    document.getElementById('section-search').classList.add('active');
+                    if (btnManual) btnManual.style.display = 'flex';
 					} else {
-					document.getElementById('section-work').classList.add('active');
-					
-					const boxUi = document.getElementById('box-ui');
-					const pendingUi = document.getElementById('pending-ui');
-					const opTabs = document.getElementById('opname-tabs');
-					const storeTabs = document.getElementById('store-tabs');
-					
-					if (mode === 'opname') {
-						if (boxUi) boxUi.style.display = 'block';
-						if (opTabs) opTabs.style.display = 'flex';
-						if (storeTabs) storeTabs.style.display = 'none';
-						if (pendingUi) pendingUi.classList.remove('active');
-						if (btnManual) btnManual.style.display = 'none';
+                    document.getElementById('section-work').classList.add('active');
+                    
+                    const boxUi = document.getElementById('box-ui');
+                    const pendingUi = document.getElementById('pending-ui');
+                    const opTabs = document.getElementById('opname-tabs');
+                    const storeTabs = document.getElementById('store-tabs');
+                    
+                    if (mode === 'opname') {
+                        if (boxUi) boxUi.style.display = 'block';
+                        if (opTabs) opTabs.style.display = 'flex';
+                        if (storeTabs) storeTabs.style.display = 'none';
+                        if (pendingUi) pendingUi.classList.remove('active');
+                        if (btnManual) btnManual.style.display = 'none';
 						} else {
-						if (boxUi) boxUi.style.display = 'none';
-						if (opTabs) opTabs.style.display = 'none';
-						if (storeTabs) storeTabs.style.display = 'flex';
-						if (pendingUi) pendingUi.classList.remove('active');
-						if (btnManual) btnManual.style.display = 'flex';
+                        // Store Mode
+                        if (boxUi) boxUi.style.display = 'none';
+                        if (opTabs) opTabs.style.display = 'none';
+                        if (storeTabs) storeTabs.style.display = 'flex';
+                        if (pendingUi) pendingUi.classList.remove('active');
+                        if (btnManual) btnManual.style.display = 'flex';
 					}
-					renderWorkTable();
+                    renderWorkTable();
 				}
-				updateUIState();
+                updateUIState();
 			}
 			
 			// --- RENDER STORE ---
@@ -1400,66 +1477,66 @@
 			}
 			
 			function manualSearch() {
-    const keyword = document.getElementById('searchInput').value.trim().toUpperCase();
-    const tbody = document.getElementById('search-body'); 
-    tbody.innerHTML = ""; 
-    if(!keyword) return;
-    
-    let results = fullInventory.filter(i => i.part.includes(keyword) || i.desc.toUpperCase().includes(keyword));
-    
-    if(results.length > 0) {
-        results.forEach(item => {
-            const locs = item.locations || [];
-            
-            // --- [UPDATE] Copy Part Number (Bukan Lokasi) ---
-            const textToCopy = item.part; 
-            // ------------------------------------------------
-            
-            let locHtml = locs.length > 0 ?
-                `<div class="loc-wrapper">${locs.map(l=>`<span class="loc-tag"><i class="fas fa-map-marker-alt"></i> ${l}</span>`).join('')}</div>` :
-                `<span style="color:var(--text-muted); font-size:0.8rem;">Belum Scan</span>`;
-
-            // Logika Nama Teknisi
-            const isTeknisi = item.category.toUpperCase().includes('TEKNISI');
-            const catColor = isTeknisi ? 'var(--accent-search)' : 'var(--accent-part)';
-            let displayCategory = isTeknisi ? (item.teknisi || "Teknisi Tanpa Nama") : item.category;
-
-            const tr = document.createElement('tr');
-            
-            // Klik baris untuk Copy Part Number
-            tr.onclick = () => {
-                navigator.clipboard.writeText(textToCopy).then(() => {
+				const keyword = document.getElementById('searchInput').value.trim().toUpperCase();
+				const tbody = document.getElementById('search-body'); 
+				tbody.innerHTML = ""; 
+				if(!keyword) return;
+				
+				let results = fullInventory.filter(i => i.part.includes(keyword) || i.desc.toUpperCase().includes(keyword));
+				
+				if(results.length > 0) {
+					results.forEach(item => {
+						const locs = item.locations || [];
+						
+						// --- [UPDATE] Copy Part Number (Bukan Lokasi) ---
+						const textToCopy = item.part; 
+						// ------------------------------------------------
+						
+						let locHtml = locs.length > 0 ?
+					`<div class="loc-wrapper">${locs.map(l=>`<span class="loc-tag"><i class="fas fa-map-marker-alt"></i> ${l}</span>`).join('')}</div>` :
+					`<span style="color:var(--text-muted); font-size:0.8rem;">Belum Scan</span>`;
+					
+					// Logika Nama Teknisi
+					const isTeknisi = item.category.toUpperCase().includes('TEKNISI');
+					const catColor = isTeknisi ? 'var(--accent-search)' : 'var(--accent-part)';
+					let displayCategory = isTeknisi ? (item.teknisi || "Teknisi Tanpa Nama") : item.category;
+					
+					const tr = document.createElement('tr');
+					
+					// Klik baris untuk Copy Part Number
+					tr.onclick = () => {
+					navigator.clipboard.writeText(textToCopy).then(() => {
                     Swal.mixin({
-                        toast: true, position: 'center', showConfirmButton: false, timer: 1000,
-                        didOpen: (toast) => {
-                            toast.style.background = 'rgba(0,0,0,0.8)';
-                            toast.style.color = 'white';
-                        }
+					toast: true, position: 'center', showConfirmButton: false, timer: 1000,
+					didOpen: (toast) => {
+					toast.style.background = 'rgba(0,0,0,0.8)';
+					toast.style.color = 'white';
+					}
                     }).fire({ icon: 'success', title: `Copied: ${textToCopy}` });
-                });
-            };
-            
-            tr.innerHTML = `
-                <td>
-                    ${locHtml}
-                </td>
-                <td>
-                    <div style="font-weight:bold">${item.part}</div>
-                    <div class="desc-text">${item.desc}</div>
-                    
-                    <div style="font-size:0.65rem; color:${catColor}; font-weight:bold; margin-top:2px;">
-                        ${displayCategory}
-                    </div>
-                    <div style="font-size:0.6rem; color:#666; margin-top:4px;">(Klik untuk Copy Part)</div>
-                </td>
-                <td style="text-align:right">${item.qty}</td>
-            `;
-            tbody.appendChild(tr);
-        });
-    } else {
-        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:20px; color:var(--text-muted)">Tidak ditemukan</td></tr>`;
-    }
-}
+					});
+					};
+					
+					tr.innerHTML = `
+					<td>
+						${locHtml}
+					</td>
+					<td>
+						<div style="font-weight:bold">${item.part}</div>
+						<div class="desc-text">${item.desc}</div>
+						
+						<div style="font-size:0.65rem; color:${catColor}; font-weight:bold; margin-top:2px;">
+							${displayCategory}
+						</div>
+						<div style="font-size:0.6rem; color:#666; margin-top:4px;">(Klik untuk Copy Part)</div>
+					</td>
+					<td style="text-align:right">${item.qty}</td>
+					`;
+					tbody.appendChild(tr);
+					});
+					} else {
+					tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:20px; color:var(--text-muted)">Tidak ditemukan</td></tr>`;
+					}
+					}
 					
 					function manageSearchItem(index) {
 					const item = fullInventory[index];
@@ -1609,12 +1686,33 @@
 					else if (secBadge) secBadge.style.display = 'none';
 					}
 					
+					// --- FUNGSI SAVE OPNAME (OPTIMIZED / DEBOUNCE) ---
 					function saveOpnameState() {
-					const state = {
+					// Batalkan simpan sebelumnya jika user masih menekan tombol
+					clearTimeout(saveOpnameTimeout);
+					
+					// Tunggu 1 detik setelah aksi terakhir, baru simpan ke DB
+					saveOpnameTimeout = setTimeout(async () => {
+                    if(!db) return;
+                    
+                    const state = {
+					key: 'current_session', // Key tetap satu agar ditimpa terus
 					box: currentBox,
-					list: opnameList
-					};
-					localStorage.setItem('wh_opname_state', JSON.stringify(state));
+					list: opnameList,
+					mode: opnameCategoryMode, // Simpan status Gudang/Teknisi
+					teknisi: currentTeknisi,
+					lastUpdate: Date.now()
+                    };
+					
+                    try {
+					const tx = db.transaction('opname_state', 'readwrite');
+					await tx.store.put(state);
+					await tx.done;
+					// console.log("Auto-save Opname Success");
+                    } catch (e) {
+					console.error("Gagal auto-save:", e);
+                    }
+					}, 1000); // Delay 1 detik
 					}
 					
 					function scrollToPart(part) {
@@ -1632,27 +1730,37 @@
 					}
 					
 					function initOpnameList(box) {
+					// [SAFETY] Jika Box sama dan data sudah ada, jangan reset!
+					if (currentBox === box && opnameList.length > 0) {
+                    Swal.mixin({ toast: true, position: 'top-end', timer: 2000, showConfirmButton: false })
+					.fire({ icon: 'info', title: `Lanjut Opname Box: ${box}` });
+                    return; 
+					}
+					
 					opnameList = [];
+					
 					if (opnameCategoryMode === 'GUDANG') {
-					fullInventory.forEach(item => {
+                    fullInventory.forEach(item => {
 					if (item.locations && item.locations.includes(box)) {
 					if (item.category !== 'SPAREPART TEKNISI') {
 					opnameList.push(createOpnameItem(item));
 					}
 					}
-					});
-					if (box) {
+                    });
+                    
+                    if (box) {
 					const totalItem = opnameList.length;
 					const badge = document.getElementById('box-part-count');
 					if (badge) badge.innerText = `${totalItem} Items`;
-					}
+                    }
 					} else {
-					fullInventory.forEach(item => {
+                    fullInventory.forEach(item => {
 					if (item.category === 'SPAREPART TEKNISI' && item.teknisi === currentTeknisi) {
 					opnameList.push(createOpnameItem(item));
 					}
-					});
+                    });
 					}
+					
 					saveOpnameState();
 					renderOpnameTable();
 					}
@@ -1688,52 +1796,70 @@
 						
 						function renderOpnameTable() {
 						if (currentMode !== 'opname') return;
+						
 						const tbody = document.getElementById('result-body');
 						const thead = document.getElementById('table-header');
-						thead.innerHTML = `<tr><th width="50%">Part Info</th><th width="20%" style="text-align:center">Fisik</th><th width="20%" style="text-align:center">Sys</th><th width="10%"></th></tr>`;
+						
+						// Set Header
+						thead.innerHTML = `<tr><th width="55%">Part Info</th> <th width="15%" style="text-align:center">Fisik</th> <th width="15%" style="text-align:center">Sys</th>   <th width="15%" style="text-align:center">Stat</th>  </tr>`;
 						tbody.innerHTML = "";
 						
-						let filteredList = opnameList.filter(item => {
+						// 1. SORTING PRIORITAS
+						// Urutan: Masalah Kritis -> Belum Scan (0) -> Selisih -> Sudah Benar (Match)
+						let displayList = [...opnameList];
+						
+						displayList.sort((a, b) => {
+						const getScore = (item) => {
+                        if (item.isUnregistered || item.isExtra) return 0; // Paling Atas (Masalah)
+                        if (item.physicalQty === 0) return 1;              // Prioritas Kerja (Belum Scan)
+                        if (item.physicalQty !== item.systemQty) return 2; // Cek Ulang (Selisih)
+                        return 3;                                          // Paling Bawah (Selesai)
+						};
+						return getScore(a) - getScore(b);
+						});
+						
+						// 2. FILTERING (Tab All, Selisih, Belum)
+						let filteredList = displayList.filter(item => {
 						if (currentOpnameView === 'all') return true;
 						if (currentOpnameView === 'pending') return item.physicalQty === 0 && !item.isExtra && !item.isUnregistered;
 						if (currentOpnameView === 'diff') {
-						const isCountedButWrong = (item.physicalQty > 0 && item.physicalQty !== item.systemQty);
-						const isExtraItem = item.isExtra || item.isUnregistered;
-						return isCountedButWrong || isExtraItem;
+                        const isCountedButWrong = (item.physicalQty > 0 && item.physicalQty !== item.systemQty);
+                        const isExtraItem = item.isExtra || item.isUnregistered;
+                        return isCountedButWrong || isExtraItem;
 						}
 						return true;
 						});
 						
+						// 3. EMPTY STATE (Jika Kosong)
 						if (filteredList.length === 0) {
-						let msg = "";
+						let msg = "Box Kosong";
 						if (currentOpnameView === 'pending') msg = "Selesai! Semua barang sudah discan.";
 						else if (currentOpnameView === 'diff') msg = "Aman! Tidak ada selisih.";
-						else msg = "Box Kosong";
+						
 						tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:40px; color:var(--text-muted); font-style:italic;">${msg}</td></tr>`;
 						updateTabCounters();
 						return;
 						}
 						
+						// 4. RENDER ROWS
 						filteredList.forEach(item => {
 						let rowClass = '';
 						let qtyClass = '';
+						
+						// Tentukan Warna & Style Baris
 						if (item.isUnregistered) {
-						rowClass = 'opname-unknown';
-						qtyClass = 'diff-text';
+                        rowClass = 'opname-unknown'; qtyClass = 'diff-text';
 						} else if (item.isExtra) {
-						rowClass = 'opname-diff';
-						qtyClass = 'diff-text';
+                        rowClass = 'opname-diff'; qtyClass = 'diff-text';
 						} else if (item.physicalQty === 0) {
-						rowClass = '';
-						qtyClass = 'text-muted';
+                        rowClass = ''; qtyClass = 'text-muted';
 						} else if (item.physicalQty === item.systemQty) {
-						rowClass = 'opname-match';
-						qtyClass = 'match-text';
+                        rowClass = 'opname-match'; qtyClass = 'match-text';
 						} else {
-						rowClass = 'opname-diff';
-						qtyClass = 'diff-text';
+                        rowClass = 'opname-diff'; qtyClass = 'diff-text';
 						}
 						
+						// Badge Tambahan
 						let badges = "";
 						if (item.isUnregistered) badges += `<span class="badge-new">NEW DB</span> `;
 						if (item.isExtra) badges += `<span class="badge-alert">SALAH LOKASI</span> `;
@@ -1742,29 +1868,30 @@
 						tr.className = `opname-row ${rowClass}`;
 						tr.id = `opname-row-${item.part}`;
 						
+						// Event: Long Press untuk Edit Jumlah Manual
 						attachLongPress(tr, () => {
-						Swal.fire({
+                        Swal.fire({
 						title: 'Edit Jumlah',
 						text: item.part,
 						input: 'number',
 						inputValue: item.physicalQty,
 						showCancelButton: true
-						}).then(r => {
+                        }).then(r => {
 						if (r.isConfirmed) updateOpnameCount(item.part, parseInt(r.value) - item.physicalQty);
-						});
+                        });
 						});
 						
 						tr.innerHTML = `
-						<td>
-							<div style="font-weight:bold; font-size:0.95rem;">${item.part}</div>
-							<div class="desc-text">${item.desc}</div>
-							<div style="margin-top:4px;">${badges}</div>
+                        <td>
+                            <div style="font-weight:bold; font-size:0.95rem;">${item.part}</div>
+                            <div class="desc-text">${item.desc}</div>
+                            <div style="margin-top:4px;">${badges}</div>
 						</td>
-						<td style="text-align:center; font-size:1.1rem; font-weight:bold" class="${qtyClass}">${item.physicalQty}</td>
-						<td style="text-align:center; font-size:0.9rem; opacity:0.7">${item.systemQty}</td>
-						<td style="text-align:center">
-							${item.physicalQty === item.systemQty && item.physicalQty > 0 ? '<i class="fas fa-check-circle" style="color:var(--accent-part)"></i>' : ''}
-							${(item.physicalQty !== item.systemQty && item.physicalQty > 0) || item.isExtra ? '<i class="fas fa-exclamation-circle" style="color:var(--danger)"></i>' : ''}
+                        <td style="text-align:center; font-size:1.1rem; font-weight:bold" class="${qtyClass}">${item.physicalQty}</td>
+                        <td style="text-align:center; font-size:0.9rem; opacity:0.7">${item.systemQty}</td>
+                        <td style="text-align:center">
+                            ${item.physicalQty === item.systemQty && item.physicalQty > 0 ? '<i class="fas fa-check-circle" style="color:var(--accent-part)"></i>' : ''}
+                            ${(item.physicalQty !== item.systemQty && item.physicalQty > 0) || item.isExtra ? '<i class="fas fa-exclamation-circle" style="color:var(--danger)"></i>' : ''}
 						</td>
 						`;
 						tbody.appendChild(tr);
@@ -1792,4 +1919,4 @@
 						init();
 					</script>
 		</body>
-	</html>	
+	</html>				
